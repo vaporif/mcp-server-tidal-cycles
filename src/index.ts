@@ -25,7 +25,6 @@ class TidalProcess {
   private outputBuffer: string = "";
   private bootTidalPath: string | null = null;
   private isReady: boolean = false;
-  private readyPromise: Promise<void> | null = null;
 
   constructor(bootTidalPath?: string) {
     if (bootTidalPath) {
@@ -483,7 +482,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (cycles !== undefined && ["xfade", "clutch", "jumpIn", "jumpMod"].includes(type)) {
         // Use the "In" variant for timed transitions
         const timedType = type === "xfade" ? "xfadeIn" :
-                          type === "clutch" ? "clutchIn" : type;
+          type === "clutch" ? "clutchIn" : type;
         code = `${timedType} ${channelResult.num} ${cycles} $ ${pattern}`;
       } else if (type === "jumpIn" || type === "jumpMod") {
         // These require a cycle count
