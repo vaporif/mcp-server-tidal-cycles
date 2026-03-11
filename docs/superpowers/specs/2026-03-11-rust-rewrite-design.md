@@ -77,7 +77,7 @@ pub struct TidalProcess {
 
 **Lifecycle**:
 - `start()` — Spawns `ghci --interactive -ghci-script <path>`. Background tokio tasks drain stdout/stderr into `Arc<Mutex<String>>` buffers. Polls for `"tidal>"` or `"Prelude>"` in stdout with 30s timeout (100ms poll interval).
-- `send(code: &str) -> Result<TidalResponse>` — Writes `code\n` to stdin, waits ~200ms, reads stderr buffer, parses error patterns. Auto-restarts if process died.
+- `send(code: &str) -> Result<TidalResponse>` — Clears both stdout/stderr buffers, writes `code\n` to stdin, waits ~200ms, reads stderr buffer, parses error patterns. Auto-restarts if process died.
 - `stop()` — Sends `:quit\n`, kills child process.
 
 **Error parsing** — regex patterns on stderr (with multiline extraction):
@@ -136,6 +136,8 @@ pub struct AnalysisResult {
 #[derive(Clone)]
 pub struct TidalMcpServer {
     tidal: Arc<tokio::sync::Mutex<Option<TidalProcess>>>,
+    tool_router: ToolRouter<Self>,
+    prompt_router: PromptRouter<Self>,
 }
 ```
 
@@ -143,7 +145,15 @@ Lazy-initializes TidalProcess on first tool call via a `get_or_init_tidal()` hel
 
 **Tool routing**: `#[tool_router]` on impl block, each tool is a `#[tool(description = "...")]` async method that delegates to functions in `tools/`.
 
-**Prompt routing**: `#[prompt_router]` on a separate impl block, each prompt is a `#[prompt(description = "...")]` async method. Uses `#[prompt_handler]` on the `ServerHandler` impl — same macro pattern as tools.
+**Prompt routing**: `#[prompt_router]` on a separate impl block, each prompt is a `#[prompt(description = "...")]` async method. Stack both `#[tool_handler]` and `#[prompt_handler]` on the `ServerHandler` impl:
+```rust
+#[tool_handler]
+#[prompt_handler]
+impl ServerHandler for TidalMcpServer {
+    fn get_info(&self) -> ServerInfo { ... }
+    // manual list_resources / read_resource here
+}
+```
 
 **Resource handling**: Manually implement `list_resources` and `read_resource` on `ServerHandler` (rmcp does not have resource macros). Match on URI to return embedded markdown content.
 
@@ -161,6 +171,7 @@ ServerCapabilities::builder()
 **tools.rs** — shared types:
 ```rust
 #[derive(Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
 pub enum TransitionType { Xfade, Clutch, Anticipate, Jump, JumpIn, JumpMod }
 
 pub fn validate_channel(channel: u8) -> Result<()>  // 1-16
@@ -254,7 +265,7 @@ async fn main() -> Result<()> {
         .init();
     let server = TidalMcpServer::new();
     let service = server.serve(rmcp::transport::stdio()).await?;
-    service.waiting().await;
+    service.waiting().await?;
     Ok(())
 }
 ```
