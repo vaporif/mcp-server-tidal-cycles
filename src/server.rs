@@ -2,11 +2,7 @@ use std::sync::Arc;
 
 use rmcp::{
     RoleServer, ServerHandler,
-    handler::server::{
-        router::prompt::PromptRouter,
-        tool::ToolRouter,
-        wrapper::Parameters,
-    },
+    handler::server::{router::prompt::PromptRouter, tool::ToolRouter, wrapper::Parameters},
     model::{
         AnnotateAble, CallToolResult, Content, GetPromptRequestParams, GetPromptResult,
         Implementation, ListPromptsResult, ListResourcesResult, PaginatedRequestParams,
@@ -21,12 +17,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use tokio::sync::Mutex;
 
-use crate::{
-    errors::Error,
-    resources::RESOURCES,
-    tidal::TidalProcess,
-    tools::TransitionType,
-};
+use crate::{errors::Error, resources::RESOURCES, tidal::TidalProcess, tools::TransitionType};
 
 // ---------------------------------------------------------------------------
 // Tool parameter structs
@@ -175,8 +166,8 @@ impl TidalMcpServer {
     ) -> Result<CallToolResult, rmcp::ErrorData> {
         let mut guard = self.get_tidal().await?;
         let tidal = guard.as_mut().expect("tidal initialized");
-        let msg = crate::tools::patterns::send_pattern(tidal, params.channel, &params.pattern)
-            .await?;
+        let msg =
+            crate::tools::patterns::send_pattern(tidal, params.channel, &params.pattern).await?;
         Ok(CallToolResult::success(vec![Content::text(msg)]))
     }
 
@@ -311,10 +302,7 @@ impl TidalMcpServer {
              different drum elements.\n\n\
              Start simple and layer up. Set the tempo first with set_tempo."
         );
-        GetPromptResult::new(vec![PromptMessage::new_text(
-            PromptMessageRole::User,
-            text,
-        )])
+        GetPromptResult::new(vec![PromptMessage::new_text(PromptMessageRole::User, text)])
     }
 
     #[prompt(description = "Create ambient soundscapes")]
@@ -331,10 +319,7 @@ impl TidalMcpServer {
              size), and subtle filter modulation.\n\n\
              Use the send_pattern tool. Keep tempo slow (try 0.25 cps or lower)."
         );
-        GetPromptResult::new(vec![PromptMessage::new_text(
-            PromptMessageRole::User,
-            text,
-        )])
+        GetPromptResult::new(vec![PromptMessage::new_text(PromptMessageRole::User, text)])
     }
 
     #[prompt(description = "Interactive live coding session")]
@@ -351,10 +336,7 @@ impl TidalMcpServer {
              - Use transitions (xfade, clutch) to smoothly change patterns\n\
              - Use the analyze tool to check audio characteristics and adjust accordingly\n\n\
              Start by asking what kind of music I'd like to create.";
-        GetPromptResult::new(vec![PromptMessage::new_text(
-            PromptMessageRole::User,
-            text,
-        )])
+        GetPromptResult::new(vec![PromptMessage::new_text(PromptMessageRole::User, text)])
     }
 
     #[prompt(description = "Explain a TidalCycles pattern")]
@@ -373,10 +355,7 @@ impl TidalMcpServer {
              4. What it will sound like\n\n\
              Reference the mini-notation docs (tidal://docs/mini-notation) if needed."
         );
-        GetPromptResult::new(vec![PromptMessage::new_text(
-            PromptMessageRole::User,
-            text,
-        )])
+        GetPromptResult::new(vec![PromptMessage::new_text(PromptMessageRole::User, text)])
     }
 }
 
@@ -426,15 +405,11 @@ impl ServerHandler for TidalMcpServer {
     ) -> Result<ReadResourceResult, rmcp::ErrorData> {
         let uri = &request.uri;
         let resource = RESOURCES.iter().find(|r| r.uri == uri).ok_or_else(|| {
-            rmcp::ErrorData::invalid_params(
-                format!("resource not found: {uri}"),
-                None,
-            )
+            rmcp::ErrorData::invalid_params(format!("resource not found: {uri}"), None)
         })?;
 
         Ok(ReadResourceResult::new(vec![
-            ResourceContents::text(resource.content, uri)
-                .with_mime_type("text/markdown"),
+            ResourceContents::text(resource.content, uri).with_mime_type("text/markdown"),
         ]))
     }
 }

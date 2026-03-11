@@ -135,9 +135,7 @@ impl TidalProcess {
             self.stderr_buffer.lock().await.clear();
         }
 
-        self.stdin
-            .write_all(format!("{code}\n").as_bytes())
-            .await?;
+        self.stdin.write_all(format!("{code}\n").as_bytes()).await?;
         self.stdin.flush().await?;
 
         sleep(SEND_DELAY).await;

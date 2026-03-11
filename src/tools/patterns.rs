@@ -34,10 +34,7 @@ pub async fn send_pattern(
 /// # Errors
 ///
 /// Returns an error if the channel is invalid or the Tidal process rejects the code.
-pub async fn silence(
-    tidal: &mut TidalProcess,
-    channel: Option<u8>,
-) -> Result<String, Error> {
+pub async fn silence(tidal: &mut TidalProcess, channel: Option<u8>) -> Result<String, Error> {
     if let Some(ch) = channel {
         let ch = validate_channel(ch)?;
         let code = format!("d{ch} silence");
@@ -71,30 +68,30 @@ pub async fn transition(
     let (code, type_name, cycle_info) = match transition_type {
         TransitionType::Xfade => cycles.map_or_else(
             || (format!("xfade {ch} $ {pattern}"), "xfade", String::new()),
-            |c| (
-                format!("xfadeIn {ch} {c} $ {pattern}"),
-                "xfade",
-                format!(" over {c} cycles"),
-            ),
+            |c| {
+                (
+                    format!("xfadeIn {ch} {c} $ {pattern}"),
+                    "xfade",
+                    format!(" over {c} cycles"),
+                )
+            },
         ),
         TransitionType::Clutch => cycles.map_or_else(
             || (format!("clutch {ch} $ {pattern}"), "clutch", String::new()),
-            |c| (
-                format!("clutchIn {ch} {c} $ {pattern}"),
-                "clutch",
-                format!(" over {c} cycles"),
-            ),
+            |c| {
+                (
+                    format!("clutchIn {ch} {c} $ {pattern}"),
+                    "clutch",
+                    format!(" over {c} cycles"),
+                )
+            },
         ),
         TransitionType::Anticipate => (
             format!("anticipate {ch} $ {pattern}"),
             "anticipate",
             String::new(),
         ),
-        TransitionType::Jump => (
-            format!("jump {ch} $ {pattern}"),
-            "jump",
-            String::new(),
-        ),
+        TransitionType::Jump => (format!("jump {ch} $ {pattern}"), "jump", String::new()),
         TransitionType::JumpIn => {
             let c = cycles.unwrap_or(1.0);
             (

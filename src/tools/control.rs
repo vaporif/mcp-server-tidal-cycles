@@ -16,9 +16,7 @@ fn handle_response(response: TidalResponse, success_msg: String) -> Result<Strin
 /// Returns an error if `cps` is not positive or the Tidal process rejects the code.
 pub async fn set_tempo(tidal: &mut TidalProcess, cps: f64) -> Result<String, Error> {
     if cps <= 0.0 {
-        return Err(Error::Validation(
-            "cps must be greater than 0".to_string(),
-        ));
+        return Err(Error::Validation("cps must be greater than 0".to_string()));
     }
     let code = format!("setcps {cps}");
     let response = tidal.send(&code).await?;
@@ -34,11 +32,7 @@ pub async fn set_tempo(tidal: &mut TidalProcess, cps: f64) -> Result<String, Err
 /// # Errors
 ///
 /// Returns an error if the channel is invalid or the Tidal process rejects the code.
-pub async fn solo(
-    tidal: &mut TidalProcess,
-    channel: u8,
-    enable: bool,
-) -> Result<String, Error> {
+pub async fn solo(tidal: &mut TidalProcess, channel: u8, enable: bool) -> Result<String, Error> {
     let ch = validate_channel(channel)?;
     let (cmd, label) = if enable {
         ("solo", "Soloed")
@@ -58,11 +52,7 @@ pub async fn solo(
 /// # Errors
 ///
 /// Returns an error if the channel is invalid or the Tidal process rejects the code.
-pub async fn mute(
-    tidal: &mut TidalProcess,
-    channel: u8,
-    enable: bool,
-) -> Result<String, Error> {
+pub async fn mute(tidal: &mut TidalProcess, channel: u8, enable: bool) -> Result<String, Error> {
     let ch = validate_channel(channel)?;
     let (cmd, label) = if enable {
         ("mute", "Muted")
