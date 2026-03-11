@@ -1,0 +1,22 @@
+[package]
+name = "mcp-server-tidal-cycles"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rmcp = { version = "1.2", features = ["server", "transport-io"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "net", "sync", "time"] }
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+schemars = "1"
+rosc = "0.10"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+glob = "0.3"
+regex = "1"
+dirs = "6"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"
+nursery = "warn"
