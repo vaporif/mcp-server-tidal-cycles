@@ -1,3 +1,5 @@
+#[allow(dead_code)] // Will be used by the MCP server module.
+mod analyzer;
 mod errors;
 #[allow(dead_code)] // Will be used by the MCP server module.
 mod tidal;
