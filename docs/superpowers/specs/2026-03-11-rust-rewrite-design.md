@@ -29,8 +29,8 @@ mcp-server-tidal-cycles/
     ├── tidal.rs                 # GHCi subprocess management
     ├── analyzer.rs              # OSC audio analysis via rosc + tokio UDP
     ├── resources.rs             # Embedded docs, resource/prompt definitions
+    ├── tools.rs                 # Shared types (TransitionType, channel validation)
     └── tools/
-        ├── mod.rs               # Shared types (TransitionType, channel validation)
         ├── patterns.rs          # send_pattern, silence, transition, once
         ├── control.rs           # set_tempo, solo, mute, panic, reset_cycles, tidal_code
         └── analysis.rs          # analyze tool
@@ -40,7 +40,7 @@ mcp-server-tidal-cycles/
 
 | Crate | Version | Features | Purpose |
 |-------|---------|----------|---------|
-| rmcp | 1.1 | server, transport-io | MCP SDK with tool macros |
+| rmcp | 1.2 | server, transport-io | MCP SDK with tool/prompt macros |
 | tokio | 1 | rt-multi-thread, macros, process, net, sync, time | Async runtime |
 | thiserror | 2 | — | Error types |
 | serde | 1 | derive | Serialization |
@@ -80,11 +80,12 @@ pub struct TidalProcess {
 - `send(code: &str) -> Result<TidalResponse>` — Writes `code\n` to stdin, waits ~200ms, reads stderr buffer, parses error patterns. Auto-restarts if process died.
 - `stop()` — Sends `:quit\n`, kills child process.
 
-**Error parsing** — regex patterns on stderr:
-- `error:`
+**Error parsing** — regex patterns on stderr (with multiline extraction):
+- `error:` (with lookahead to capture multiline error body)
 - `parse error`
 - `not in scope`
 - `couldn't match`
+- Fallback: generic check for `error`/`Error`/`exception` strings
 
 **Response type**:
 ```rust
@@ -107,17 +108,17 @@ pub async fn analyze(duration_secs: u32) -> Result<AnalysisResult>
 1. Bind tokio `UdpSocket` on `127.0.0.1:57130`
 2. Encode and send `/tidal/startAnalysis` with duration to `127.0.0.1:57120` via `rosc`
 3. Receive loop: decode OSC packets
-   - `/analysis/result` — extract `[amplitude, rms, centroid, flatness, onset]`, accumulate
+   - `/analysis/result` — extract `[amplitude, rms, centroid, flatness, onset]` as f32 values, accumulate amplitude/rms/centroid/flatness into `Vec<f32>`. Count onset if value > 0.5 (increment `onsets` counter).
    - `/analysis/done` — break
 4. Timeout: `duration + 1` seconds via `tokio::time::timeout`
 
 **Result type**:
 ```rust
 pub struct AnalysisResult {
-    pub amplitude: Vec<f64>,
-    pub rms: Vec<f64>,
-    pub centroid: Vec<f64>,
-    pub flatness: Vec<f64>,
+    pub amplitude: Vec<f32>,
+    pub rms: Vec<f32>,
+    pub centroid: Vec<f32>,
+    pub flatness: Vec<f32>,
     pub onsets: u32,
 }
 ```
@@ -142,11 +143,22 @@ Lazy-initializes TidalProcess on first tool call via a `get_or_init_tidal()` hel
 
 **Tool routing**: `#[tool_router]` on impl block, each tool is a `#[tool(description = "...")]` async method that delegates to functions in `tools/`.
 
-**ServerHandler trait**: Manually implement `list_resources`, `read_resource`, `list_prompts`, `get_prompt` for resource/prompt support (rmcp macros only cover tools).
+**Prompt routing**: `#[prompt_router]` on a separate impl block, each prompt is a `#[prompt(description = "...")]` async method. Uses `#[prompt_handler]` on the `ServerHandler` impl — same macro pattern as tools.
+
+**Resource handling**: Manually implement `list_resources` and `read_resource` on `ServerHandler` (rmcp does not have resource macros). Match on URI to return embedded markdown content.
+
+**ServerCapabilities**: `get_info()` must advertise all three capabilities:
+```rust
+ServerCapabilities::builder()
+    .enable_tools()
+    .enable_prompts()
+    .enable_resources()
+    .build()
+```
 
 ### 4. Tools (src/tools/)
 
-**tools/mod.rs** — shared types:
+**tools.rs** — shared types:
 ```rust
 #[derive(Deserialize, JsonSchema)]
 pub enum TransitionType { Xfade, Clutch, Anticipate, Jump, JumpIn, JumpMod }
@@ -158,14 +170,22 @@ pub fn validate_channel(channel: u8) -> Result<()>  // 1-16
 | Function | Tidal Command |
 |----------|--------------|
 | `send_pattern(channel, pattern)` | `d{n} $ {pattern}` |
-| `silence(channel?)` | `silence {n}` or `hush` |
-| `transition(channel, pattern, type, cycles?)` | `xfadeIn {n} {c} $ {p}` etc. |
+| `silence(channel?)` | `d{n} silence` or `hush` |
+| `transition(channel, pattern, type, cycles?)` | See transition logic below |
 | `once(pattern)` | `once $ {pattern}` |
+
+**Transition logic** (branching based on type and cycles):
+- `xfade`: without cycles → `xfade {n} $ {p}`, with cycles → `xfadeIn {n} {c} $ {p}`
+- `clutch`: without cycles → `clutch {n} $ {p}`, with cycles → `clutchIn {n} {c} $ {p}`
+- `anticipate`: `anticipate {n} $ {p}` (cycles ignored)
+- `jump`: `jump {n} $ {p}` (cycles ignored)
+- `jumpIn`: `jumpIn {n} {c} $ {p}` (cycles defaults to 1)
+- `jumpMod`: `jumpMod {n} {c} $ {p}` (cycles defaults to 4)
 
 **tools/control.rs**:
 | Function | Tidal Command |
 |----------|--------------|
-| `set_tempo(cps)` | `setcps {cps}` (validates >= 0.01) |
+| `set_tempo(cps)` | `setcps {cps}` (validates > 0) |
 | `solo(channel, enable)` | `solo {n}` / `unsolo {n}` |
 | `mute(channel, enable)` | `mute {n}` / `unmute {n}` |
 | `panic()` | `panic` |
@@ -239,7 +259,7 @@ async fn main() -> Result<()> {
 }
 ```
 
-Graceful shutdown: `TidalMcpServer` implements `Drop` to send `:quit` to GHCi.
+Graceful shutdown via `tokio::signal` handlers (SIGINT/SIGTERM) — calls `tidal.stop()` before exit. Cannot use `Drop` since it's synchronous and cannot acquire async mutex locks.
 
 ## Build & Distribution
 
