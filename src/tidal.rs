@@ -1,8 +1,8 @@
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock};
 
 use regex::Regex;
 use tokio::{
-    io::{AsyncReadExt, AsyncWriteExt},
+    io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
     process::{Child, ChildStdin},
     sync::Mutex,
     time::{Duration, sleep, timeout},
@@ -16,6 +16,18 @@ const BOOT_TIMEOUT: Duration = Duration::from_secs(30);
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
 const SEND_DELAY: Duration = Duration::from_millis(200);
 
+static ERROR_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
+    [
+        r"(?is)error:.*?(?:\n\n|\n[^\s]|$)",
+        r"(?is)parse error.*?(?:\n\n|\n[^\s]|$)",
+        r"(?is)not in scope.*?(?:\n\n|\n[^\s]|$)",
+        r"(?is)couldn't match.*?(?:\n\n|\n[^\s]|$)",
+    ]
+    .iter()
+    .map(|pat| Regex::new(pat).expect("error pattern must compile"))
+    .collect()
+});
+
 #[derive(Debug)]
 pub enum TidalResponse {
     Success { output: Option<String> },
@@ -27,6 +39,22 @@ pub struct TidalProcess {
     stdout_buffer: Arc<Mutex<String>>,
     stderr_buffer: Arc<Mutex<String>>,
     child: Child,
+}
+
+fn drain_stream<R: AsyncRead + Unpin + Send + 'static>(stream: R, buffer: Arc<Mutex<String>>) {
+    tokio::spawn(async move {
+        let mut stream = stream;
+        let mut tmp = [0u8; 1024];
+        loop {
+            match stream.read(&mut tmp).await {
+                Ok(0) | Err(_) => break,
+                Ok(n) => {
+                    let text = String::from_utf8_lossy(&tmp[..n]);
+                    buffer.lock().await.push_str(&text);
+                }
+            }
+        }
+    });
 }
 
 impl TidalProcess {
@@ -55,38 +83,12 @@ impl TidalProcess {
         let stdout_buffer = Arc::new(Mutex::new(String::new()));
         let stderr_buffer = Arc::new(Mutex::new(String::new()));
 
-        // Drain stdout
-        if let Some(mut stdout) = child.stdout.take() {
-            let buf = Arc::clone(&stdout_buffer);
-            tokio::spawn(async move {
-                let mut tmp = [0u8; 1024];
-                loop {
-                    match stdout.read(&mut tmp).await {
-                        Ok(0) | Err(_) => break,
-                        Ok(n) => {
-                            let text = String::from_utf8_lossy(&tmp[..n]);
-                            buf.lock().await.push_str(&text);
-                        }
-                    }
-                }
-            });
+        if let Some(stdout) = child.stdout.take() {
+            drain_stream(stdout, Arc::clone(&stdout_buffer));
         }
 
-        // Drain stderr
-        if let Some(mut stderr) = child.stderr.take() {
-            let buf = Arc::clone(&stderr_buffer);
-            tokio::spawn(async move {
-                let mut tmp = [0u8; 1024];
-                loop {
-                    match stderr.read(&mut tmp).await {
-                        Ok(0) | Err(_) => break,
-                        Ok(n) => {
-                            let text = String::from_utf8_lossy(&tmp[..n]);
-                            buf.lock().await.push_str(&text);
-                        }
-                    }
-                }
-            });
+        if let Some(stderr) = child.stderr.take() {
+            drain_stream(stderr, Arc::clone(&stderr_buffer));
         }
 
         // Wait for ready prompt
@@ -130,10 +132,8 @@ impl TidalProcess {
         }
 
         // Clear buffers
-        {
-            self.stdout_buffer.lock().await.clear();
-            self.stderr_buffer.lock().await.clear();
-        }
+        self.stdout_buffer.lock().await.clear();
+        self.stderr_buffer.lock().await.clear();
 
         self.stdin.write_all(format!("{code}\n").as_bytes()).await?;
         self.stdin.flush().await?;
@@ -200,17 +200,8 @@ fn parse_error(stderr: &str) -> Option<String> {
         return None;
     }
 
-    let patterns = [
-        r"(?is)error:.*?(?:\n\n|\n[^\s]|$)",
-        r"(?is)parse error.*?(?:\n\n|\n[^\s]|$)",
-        r"(?is)not in scope.*?(?:\n\n|\n[^\s]|$)",
-        r"(?is)couldn't match.*?(?:\n\n|\n[^\s]|$)",
-    ];
-
-    for pat in &patterns {
-        if let Ok(re) = Regex::new(pat)
-            && let Some(m) = re.find(stderr)
-        {
+    for re in ERROR_PATTERNS.iter() {
+        if let Some(m) = re.find(stderr) {
             return Some(m.as_str().trim().to_owned());
         }
     }

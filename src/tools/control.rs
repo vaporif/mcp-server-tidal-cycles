@@ -1,12 +1,36 @@
-use crate::errors::Error;
-use crate::tidal::{TidalProcess, TidalResponse};
-use crate::tools::validate_channel;
+use schemars::JsonSchema;
+use serde::Deserialize;
 
-fn handle_response(response: TidalResponse, success_msg: String) -> Result<String, Error> {
-    match response {
-        TidalResponse::Success { output } => Ok(output.unwrap_or(success_msg)),
-        TidalResponse::Error { message } => Err(Error::Tidal(message)),
-    }
+use crate::errors::Error;
+use crate::tidal::TidalProcess;
+use crate::tools::{handle_response, validate_channel};
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SetTempoParams {
+    /// Tempo in cycles per second
+    pub cps: f64,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SoloParams {
+    /// Channel number (1-16)
+    pub channel: u8,
+    /// true to solo, false to unsolo
+    pub enable: bool,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct MuteParams {
+    /// Channel number (1-16)
+    pub channel: u8,
+    /// true to mute, false to unmute
+    pub enable: bool,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct TidalCodeParams {
+    /// Arbitrary Tidal/Haskell code to execute
+    pub code: String,
 }
 
 /// Set the tempo in cycles per second.
@@ -21,10 +45,7 @@ pub async fn set_tempo(tidal: &mut TidalProcess, cps: f64) -> Result<String, Err
     let code = format!("setcps {cps}");
     let response = tidal.send(&code).await?;
     let bpm = (cps * 60.0 * 4.0).round();
-    match response {
-        TidalResponse::Success { .. } => Ok(format!("Tempo set to {cps} cps (~{bpm} BPM)")),
-        TidalResponse::Error { message } => Err(Error::Tidal(message)),
-    }
+    handle_response(response, format!("Tempo set to {cps} cps (~{bpm} BPM)"))
 }
 
 /// Solo or unsolo a channel.
@@ -41,10 +62,7 @@ pub async fn solo(tidal: &mut TidalProcess, channel: u8, enable: bool) -> Result
     };
     let code = format!("{cmd} {ch}");
     let response = tidal.send(&code).await?;
-    match response {
-        TidalResponse::Success { .. } => Ok(format!("{label} channel d{ch}")),
-        TidalResponse::Error { message } => Err(Error::Tidal(message)),
-    }
+    handle_response(response, format!("{label} channel d{ch}"))
 }
 
 /// Mute or unmute a channel.
@@ -61,10 +79,7 @@ pub async fn mute(tidal: &mut TidalProcess, channel: u8, enable: bool) -> Result
     };
     let code = format!("{cmd} {ch}");
     let response = tidal.send(&code).await?;
-    match response {
-        TidalResponse::Success { .. } => Ok(format!("{label} channel d{ch}")),
-        TidalResponse::Error { message } => Err(Error::Tidal(message)),
-    }
+    handle_response(response, format!("{label} channel d{ch}"))
 }
 
 /// Send MIDI panic (all notes off).
@@ -74,10 +89,7 @@ pub async fn mute(tidal: &mut TidalProcess, channel: u8, enable: bool) -> Result
 /// Returns an error if the Tidal process rejects the code.
 pub async fn panic(tidal: &mut TidalProcess) -> Result<String, Error> {
     let response = tidal.send("panic").await?;
-    match response {
-        TidalResponse::Success { .. } => Ok("MIDI panic sent - all notes off".to_string()),
-        TidalResponse::Error { message } => Err(Error::Tidal(message)),
-    }
+    handle_response(response, "MIDI panic sent - all notes off".to_string())
 }
 
 /// Reset the cycle count to 0.
@@ -87,10 +99,7 @@ pub async fn panic(tidal: &mut TidalProcess) -> Result<String, Error> {
 /// Returns an error if the Tidal process rejects the code.
 pub async fn reset_cycles(tidal: &mut TidalProcess) -> Result<String, Error> {
     let response = tidal.send("resetCycles").await?;
-    match response {
-        TidalResponse::Success { .. } => Ok("Cycle count reset to 0".to_string()),
-        TidalResponse::Error { message } => Err(Error::Tidal(message)),
-    }
+    handle_response(response, "Cycle count reset to 0".to_string())
 }
 
 /// Execute arbitrary Tidal/Haskell code.

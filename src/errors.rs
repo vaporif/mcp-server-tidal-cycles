@@ -21,6 +21,9 @@ pub enum Error {
 impl From<Error> for McpError {
     fn from(err: Error) -> Self {
         tracing::error!("{err}");
-        Self::internal_error(err.to_string(), None)
+        match &err {
+            Error::Validation(_) => Self::invalid_params(err.to_string(), None),
+            _ => Self::internal_error(err.to_string(), None),
+        }
     }
 }

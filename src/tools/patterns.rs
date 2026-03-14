@@ -1,12 +1,41 @@
-use crate::errors::Error;
-use crate::tidal::{TidalProcess, TidalResponse};
-use crate::tools::{TransitionType, validate_channel};
+use schemars::JsonSchema;
+use serde::Deserialize;
 
-fn handle_response(response: TidalResponse, success_msg: String) -> Result<String, Error> {
-    match response {
-        TidalResponse::Success { .. } => Ok(success_msg),
-        TidalResponse::Error { message } => Err(Error::Tidal(message)),
-    }
+use crate::errors::Error;
+use crate::tidal::TidalProcess;
+use crate::tools::{TransitionType, handle_response, validate_channel};
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SendPatternParams {
+    /// Channel number (1-16)
+    pub channel: u8,
+    /// Pattern to play
+    pub pattern: String,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SilenceParams {
+    /// Channel to silence (omit to silence all)
+    pub channel: Option<u8>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct TransitionParams {
+    /// Channel number (1-16)
+    pub channel: u8,
+    /// Pattern to transition to
+    pub pattern: String,
+    /// Transition type
+    #[serde(rename = "type")]
+    pub transition_type: TransitionType,
+    /// Number of cycles for the transition
+    pub cycles: Option<f64>,
+}
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct OnceParams {
+    /// Pattern to play once
+    pub pattern: String,
 }
 
 /// Send a pattern to a specific channel (d1-d16).

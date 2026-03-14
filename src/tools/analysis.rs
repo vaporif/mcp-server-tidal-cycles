@@ -1,4 +1,13 @@
+use schemars::JsonSchema;
+use serde::Deserialize;
+
 use crate::errors::Error;
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct AnalyzeParams {
+    /// Duration in seconds (1-30, default 5)
+    pub duration: Option<u32>,
+}
 
 /// Analyze audio for a given duration (1-30 seconds).
 ///

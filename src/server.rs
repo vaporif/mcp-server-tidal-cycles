@@ -17,78 +17,16 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use tokio::sync::Mutex;
 
-use crate::{errors::Error, resources::RESOURCES, tidal::TidalProcess, tools::TransitionType};
-
-// ---------------------------------------------------------------------------
-// Tool parameter structs
-// ---------------------------------------------------------------------------
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct SendPatternParams {
-    /// Channel number (1-16)
-    pub channel: u8,
-    /// Pattern to play
-    pub pattern: String,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct SilenceParams {
-    /// Channel to silence (omit to silence all)
-    pub channel: Option<u8>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct SetTempoParams {
-    /// Tempo in cycles per second
-    pub cps: f64,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct SoloParams {
-    /// Channel number (1-16)
-    pub channel: u8,
-    /// true to solo, false to unsolo
-    pub enable: bool,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct MuteParams {
-    /// Channel number (1-16)
-    pub channel: u8,
-    /// true to mute, false to unmute
-    pub enable: bool,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct TransitionParams {
-    /// Channel number (1-16)
-    pub channel: u8,
-    /// Pattern to transition to
-    pub pattern: String,
-    /// Transition type
-    #[serde(rename = "type")]
-    pub transition_type: TransitionType,
-    /// Number of cycles for the transition
-    pub cycles: Option<f64>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct OnceParams {
-    /// Pattern to play once
-    pub pattern: String,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct AnalyzeParams {
-    /// Duration in seconds (1-30, default 5)
-    pub duration: Option<u32>,
-}
-
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct TidalCodeParams {
-    /// Arbitrary Tidal/Haskell code to execute
-    pub code: String,
-}
+use crate::{
+    errors::Error,
+    resources::RESOURCES,
+    tidal::TidalProcess,
+    tools::{
+        analysis::AnalyzeParams,
+        control::{MuteParams, SetTempoParams, SoloParams, TidalCodeParams},
+        patterns::{OnceParams, SendPatternParams, SilenceParams, TransitionParams},
+    },
+};
 
 // ---------------------------------------------------------------------------
 // Prompt parameter structs
