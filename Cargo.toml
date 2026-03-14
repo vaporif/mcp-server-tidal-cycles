@@ -2,12 +2,26 @@
 name = "mcp-server-tidal-cycles"
 version = "0.1.0"
 edition = "2024"
+description = "MCP server for TidalCycles live coding with audio analysis"
+license = "MIT"
+repository = "https://github.com/vaporif/tidal-cycles-mcp"
+readme = "README.md"
+keywords = ["mcp", "tidal-cycles", "live-coding"]
+categories = ["command-line-utilities"]
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+multiple_crate_versions = "allow"
 
 [dependencies]
 rmcp = { version = "1.2", features = ["server", "macros", "transport-io"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "net", "sync", "time", "signal"] }
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 schemars = "1"
 rosc = "0.10"
 tracing = "0.1"
@@ -16,7 +30,8 @@ glob = "0.3"
 regex = "1"
 dirs = "6"
 
-[lints.clippy]
-all = "warn"
-pedantic = "warn"
-nursery = "warn"
+[profile.release]
+strip = true
+lto = true
+opt-level = "z"
+codegen-units = 1

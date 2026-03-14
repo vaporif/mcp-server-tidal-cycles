@@ -1,0 +1,23 @@
+[build-system]
+requires = ["maturin>=1.0,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "mcp-server-tidal-cycles"
+dynamic = ["version"]
+description = "MCP server for TidalCycles live coding with audio analysis"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.8"
+keywords = ["mcp", "tidal-cycles", "live-coding"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Rust",
+]
+
+[project.urls]
+Repository = "https://github.com/vaporif/tidal-cycles-mcp"
+
+[tool.maturin]
+bindings = "bin"

@@ -1,49 +1,101 @@
 {
-  description = "MCP server for TidalCycles live coding";
-
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
     fenix = {
       url = "github:nix-community/fenix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    crane.url = "github:ipetkov/crane";
+    crane = {
+      url = "github:ipetkov/crane";
+    };
   };
 
   outputs = {
     self,
     nixpkgs,
-    flake-utils,
     fenix,
     crane,
-  }:
-    flake-utils.lib.eachDefaultSystem (system: let
-      pkgs = nixpkgs.legacyPackages.${system};
-      fenixPkgs = fenix.packages.${system};
-      toolchain = fenixPkgs.stable.toolchain;
-      craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
+    ...
+  }: let
+    systems = ["x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin"];
+    forAllSystems = f:
+      nixpkgs.lib.genAttrs systems (system:
+        f {
+          pkgs = nixpkgs.legacyPackages.${system};
+          fenixPkgs = fenix.packages.${system};
+          craneLib =
+            (crane.mkLib nixpkgs.legacyPackages.${system}).overrideToolchain
+            fenix.packages.${system}.stable.toolchain;
+        });
+  in {
+    formatter = nixpkgs.lib.genAttrs systems (system: nixpkgs.legacyPackages.${system}.alejandra);
 
+    overlays.default = final: _prev: {
+      mcp-server-tidal-cycles = self.packages.${final.stdenv.hostPlatform.system}.default;
+    };
+
+    packages = forAllSystems ({
+      pkgs,
+      craneLib,
+      ...
+    }: let
       src = craneLib.cleanCargoSource ./.;
-
       commonArgs = {
         inherit src;
+        pname = "mcp-server-tidal-cycles";
         strictDeps = true;
-      };
-
-      cargoArtifacts = craneLib.buildDepsOnly commonArgs;
-
-      mcp-server-tidal-cycles = craneLib.buildPackage (commonArgs
-        // {
-          inherit cargoArtifacts;
-        });
-    in {
-      packages.default = mcp-server-tidal-cycles;
-
-      devShells.default = craneLib.devShell {
-        packages = [
-          pkgs.cargo-nextest
+        nativeBuildInputs = [
+          pkgs.pkg-config
+        ];
+        buildInputs = pkgs.lib.optionals pkgs.stdenv.isDarwin [
+          pkgs.libiconv
+          pkgs.apple-sdk_15
         ];
       };
+      cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+      meta = {
+        description = "MCP server for TidalCycles live coding with audio analysis";
+        license = pkgs.lib.licenses.mit;
+        mainProgram = "mcp-server-tidal-cycles";
+      };
+    in {
+      default = craneLib.buildPackage (commonArgs // {inherit cargoArtifacts meta;});
     });
+
+    devShells = forAllSystems ({
+      pkgs,
+      fenixPkgs,
+      ...
+    }: let
+      toolchain = fenixPkgs.stable.withComponents [
+        "cargo"
+        "clippy"
+        "rustc"
+        "rustfmt"
+        "rust-src"
+        "rust-analyzer"
+      ];
+    in {
+      default = pkgs.mkShell {
+        packages =
+          [
+            toolchain
+            pkgs.just
+            pkgs.taplo
+            pkgs.typos
+            pkgs.actionlint
+            pkgs.cargo-nextest
+            pkgs.cargo-deny
+          ]
+          ++ pkgs.lib.optionals pkgs.stdenv.isDarwin [
+            pkgs.apple-sdk_15
+          ];
+
+        env = {
+          RUST_BACKTRACE = "1";
+          RUST_SRC_PATH = "${toolchain}/lib/rustlib/src/rust/library";
+        };
+      };
+    });
+  };
 }
